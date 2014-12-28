@@ -1,0 +1,321 @@
+;;================================================
+;; CHIP:        MT6572
+;; PURPOSE:     Linux Nocode
+;; CREATE_DATE: 2013/04/24
+;; NOTE:        Parallel JTAG
+;;================================================
+;; [MT6572 CodeViser Version Baseline]
+;; Client: 
+;;    \\srdfs01.mediatek.inc\application\CodeViser\software\CodeViser_V2.51_20120917
+;; Firmware:
+;;    \\srdfs01.mediatek.inc\application\CodeViser\Patch\CVD_2.51\20121127_CA7_memory_dump
+;;================================================
+
+;;-> <<< Parameters >>>
+;;================================================
+;; Constant
+;;================================================
+;;-> # Constant: Platform Parameters
+&CONST_CORENUM=2
+
+;;================================================
+;; Options
+;;================================================
+;;-> # Option: Load Path Settings
+;; OPT_KERNEL_PATH: ALPS code base kernel path ex: xxx\alps\kernel
+&OPT_CTP_PATH
+&OPT_LDVT_PATH
+&OPT_KERNEL_PATH="..\..\..\..\kernel"
+
+
+;;-> # Option: Serial Wire or Parallel JTAG
+;; 0: Parallel
+;; 1: Serial Wire
+&OPT_JTAG=0
+
+;;================================================
+;; Control Code
+;;================================================
+
+ENTRY &IN_MENU
+;;-> <<< Menu Switch >>>
+IF "&IN_MENU"=="M_CHIP_RESET"
+(
+    GOSUB MENU_RESET    
+)
+ELSE IF "&IN_MENU"=="M_RELOAD_ELF"
+(
+    GOSUB MENU_RELOAD_ELF
+)
+ELSE IF "&IN_MENU"=="M_KE_DEBUG"
+(
+    GOSUB MENU_KE_DEBUG
+)
+ELSE IF "&IN_MENU"=="M_CHIP_ATTACH"
+(
+    GOSUB MENU_ATTACH  
+)
+ELSE IF "&IN_MENU"=="M_KICK_DOG"
+(
+    GOSUB MENU_KICK_DOG  
+)
+ELSE IF "&IN_MENU"=="M_KICK_DOG_BREAK"
+(
+    GOSUB MENU_KICK_DOG_BREAK  
+)
+ELSE IF "&IN_MENU"=="M_LET_DOG_HOME"
+(
+    GOSUB MENU_LET_DOG_HOME  
+)
+ELSE IF "&IN_MENU"=="M_LET_DOG_HOME_BREAK"
+(
+    GOSUB MENU_LET_DOG_HOME_BREAK  
+)
+
+
+;;-> @ APMCU Connection
+system.down
+SYStem.RESet
+SYStem.Option ENRESET ON
+SYStem.Option ResBreak OFF
+SYStem.Option WaitReset OFF
+SYStem.JtagClock 10.MHz
+SYStem.CPU CortexA7MPCore
+SYStem.CONFIG CORENUMBER &CONST_CORENUM
+SYStem.CONFIG COREBASE 0x80070000 0x80072000
+IF &OPT_JTAG==0
+(
+System.CONFIG SWDP OFF
+)
+ELSE IF &OPT_JTAG==1
+(
+System.CONFIG SWDP ON  
+)
+SYStem.Up
+
+;;-> @ APMCU Environment Setting
+;; disable WDT
+d.s asd:0x10007000 %le %long 0x22000000
+
+;;-> @ Android NOCODE  
+    print "[INFO][MAIN] Loading Linux Kernel Symbols ..."
+    LoadImage &OPT_KERNEL_PATH\out\vmlinux %GNU %SYMBOL
+    print "[INFO][MAIN] Loading Linux Kernel Symbols ... Done."
+    
+    GOSUB SET_KERNEL_SPATH
+    
+    TASK.CONFIG linux          ; loads Linux awareness (linux.t32)
+    MENU.ReProgram linux       ; loads Linux menu (linux.men)
+    HELP.FILTER.Add rtoslinux  ; add linux awareness manual to help filter
+
+;;-> <<< COMMON SCRIPT FOOTER >>>
+;;-> @ Set default breakpoint to HW
+Break.Select Program OnChip
+Break.Select Hll OnChip
+Break.Select Spot OnChip
+Break.Select Read OnChip
+Break.Select Write OnChip
+
+;;-> @ Menu Config
+menu.reprogram MT6572_EVB_Menu
+
+on pbreak gosub
+(
+    LOCAL &spm_reg
+    &spm_reg=data.long(asd:0x10006014)
+    &spm_reg=&spm_reg|0x00400000
+    data.set asd:0x10006014 %le %long &spm_reg
+    &spm_reg=&spm_reg&0xFFBFFFFF
+    data.set asd:0x10006014 %le %long &spm_reg
+    data.set asd:0x100063E4 %le %long 0x0000000F
+    &spm_reg=data.long(asd:0x10006314)
+    &spm_reg=&spm_reg&0xFFFFFEFF
+    &spm_reg=&spm_reg|0x0b160000
+    data.set asd:0x10006314 %le %long &spm_reg
+    d.s asd:0x10007000 %le %long 0x22000000
+    print "[INFO][MAIN] Disable WDT"
+)
+
+;; List code
+d.l
+stop
+END
+
+;;-> <<< Functions >>>
+SET_KERNEL_SPATH:
+    LOCAL &KERN_PATH
+    &KERN_PATH="&OPT_KERNEL_PATH"
+    y.spath.reset
+    y.spath.srd &KERN_PATH/init
+    y.spath.srd &KERN_PATH/irq
+    y.spath.srd &KERN_PATH/arch/arm/kernel
+    y.spath.srd &KERN_PATH/arch/arm/boot
+    y.spath.srd &KERN_PATH/arch/arm/mm
+    y.spath.srd &KERN_PATH/../mediatek/platform/mt6572/kernel/core
+    y.spath.srd &KERN_PATH/../mediatek/platform/mt6572/kernel/drivers
+    y.spath.srd &KERN_PATH/../mediatek/platform/mt6572/kernel/core/include/mach
+    y.spath.srd &KERN_PATH/../mediatek/kernel
+    RETURN
+
+;;-> <<< Menu Functions >>>
+MENU_RESET:
+    print "[INFO][MAIN] Chip Reset"
+    system.down
+    SYStem.RESet
+    SYStem.Option ENRESET ON
+    SYStem.Option ResBreak OFF
+    SYStem.Option WaitReset OFF
+    SYStem.JtagClock 10.MHz
+    SYStem.CPU CortexA7MPCore
+    SYStem.CONFIG CORENUMBER &CONST_CORENUM
+    SYStem.CONFIG COREBASE 0x80070000 0x80072000
+    IF &OPT_JTAG==0
+    (
+    System.CONFIG SWDP OFF
+    )
+    ELSE IF &OPT_JTAG==1
+    (
+    System.CONFIG SWDP ON
+    )
+    SYStem.Up
+    d.s asd:0x10007000 %le %long 0x22000000
+    STOP
+    
+MENU_RELOAD_ELF:
+    print "[INFO][MAIN] Loading Linux Kernel Symbols ..."
+    LoadImage &OPT_KERNEL_PATH\out\vmlinux %GNU %SYMBOL
+    STOP
+
+MENU_KE_DEBUG:
+    &die=GETADDRESS(die)+0x38
+    ;; Check exception status
+    IF REGISTER(PC)==&die
+    (
+        print "[INFO][MAIN] Exception at 0x" VARVALUE(regs.uregs[15])
+    
+        local &r0  &r1  &r2  &r3  &r4  &r5  &r6  &r7 
+        local &r8  &r9  &r10 &r11 &r12 &r13 &r14
+        local &pc  &cpsr
+        local &i
+        
+        ; first get all register values from local variable "regs"
+        
+        &i=0.
+        while &i<15.
+        (
+          ; collect all registers to script variables &r0-&r14
+          &ic=CUT("&i",-1)   ; to cut trailing dot
+          &r&ic=VARVALUE(regs.uregs[&ic]) ; &r0=VARVALUE(regs.uregs[0])
+          &i=&i+1
+        )
+        &pc=VARVALUE(regs.uregs[15])
+        &cpsr=VARVALUE(regs.uregs[16])
+        
+         second write values into registers temporarily
+        
+        WriteREGister cpsr &cpsr ; set CPSR first! (regbank)
+        &i=0.
+        while &i<15.
+        (
+          &ic=CUT("&i",-1)  ; to cut trailing dot
+          &&value=&r&ic            ; && for recursive macro parsing
+          WriteREGister r&ic &value ; r.s r0 &r0
+          &i=&i+1
+        )
+        WriteREGister pc &pc
+    )
+    ELSE IF (REGISTER(PC)==panic)
+    (
+        BackTrace
+    )
+    ELSE
+    (
+        print "[INFO][MAIN] Set Breakpoints "
+        ;; Set Breakpoints
+        SetBREAK &die %Program  %hw
+        SetBREAK panic %Program %hw
+        print "[INFO][MAIN] Set Breakpoints Done."
+    )
+    STOP
+
+MENU_ATTACH:
+    print "[INFO][MAIN] Attach Target"
+    system.down
+    SYStem.RESet
+    SYStem.Option ENRESET OFF
+    SYStem.Option ResBreak OFF
+    SYStem.Option WaitReset OFF
+    SYStem.JtagClock 10.MHz
+    SYStem.CPU CortexA7MPCore
+    SYStem.CONFIG CORENUMBER &CONST_CORENUM
+    SYStem.CONFIG COREBASE 0x80070000 0x80072000
+    IF &OPT_JTAG==0
+    (
+    System.CONFIG SWDP OFF
+    )
+    ELSE IF &OPT_JTAG==1
+    (
+    System.CONFIG SWDP ON
+    )
+    SYStem.Attach
+    while ISRUN()
+    ( 
+    )
+    print "[INFO][MAIN] Watchdog Disabled"
+    d.s asd:0x10007000 %le %long 0x22000000
+    STOP
+    
+MENU_KICK_DOG:
+    print "[INFO][MAIN] Kick Watchdog"
+    LOCAL &spm_reg
+    &spm_reg=data.long(asd:0x10006014)
+    &spm_reg=&spm_reg|0x00400000
+    data.set asd:0x10006014 %le %long &spm_reg
+    &spm_reg=&spm_reg&0xFFBFFFFF
+    data.set asd:0x10006014 %le %long &spm_reg
+    STOP
+    
+MENU_KICK_DOG_BREAK:
+    print "[INFO][MAIN] Kick Watchdog and Break"
+    break
+    LOCAL &spm_reg
+    &spm_reg=data.long(asd:0x10006014)
+    &spm_reg=&spm_reg|0x00400000
+    data.set asd:0x10006014 %le %long &spm_reg
+    &spm_reg=&spm_reg&0xFFBFFFFF
+    data.set asd:0x10006014 %le %long &spm_reg
+    STOP
+    
+MENU_LET_DOG_HOME:
+    print "[INFO][MAIN] Disable Watchdog"
+    LOCAL &spm_reg
+    &spm_reg=data.long(asd:0x10006014)
+    &spm_reg=&spm_reg|0x00400000
+    data.set asd:0x10006014 %le %long &spm_reg
+    &spm_reg=&spm_reg&0xFFBFFFFF
+    data.set asd:0x10006014 %le %long &spm_reg
+    data.set asd:0x100063E4 %le %long 0x0000000F
+    &spm_reg=data.long(asd:0x10006314)
+    &spm_reg=&spm_reg&0xFFFFFEFF
+    &spm_reg=&spm_reg|0x0b160000
+    data.set asd:0x10006314 %le %long &spm_reg
+    d.s asd:0x10007000 %le %long 0x22000000
+    STOP
+    
+MENU_LET_DOG_HOME_BREAK:
+    print "[INFO][MAIN] Break and Disable Watchdog"
+    break
+    LOCAL &spm_reg
+    &spm_reg=data.long(asd:0x10006014)
+    &spm_reg=&spm_reg|0x00400000
+    data.set asd:0x10006014 %le %long &spm_reg
+    &spm_reg=&spm_reg&0xFFBFFFFF
+    data.set asd:0x10006014 %le %long &spm_reg
+    data.set asd:0x100063E4 %le %long 0x0000000F
+    &spm_reg=data.long(asd:0x10006314)
+    &spm_reg=&spm_reg&0xFFFFFEFF
+    &spm_reg=&spm_reg|0x0b160000
+    data.set asd:0x10006314 %le %long &spm_reg
+    d.s asd:0x10007000 %le %long 0x22000000
+    STOP
+

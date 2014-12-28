@@ -1,0 +1,110 @@
+
+ENTRY &opt1 ; option to ungatemd
+&NR_CPUS=4
+;SYSTEM.Reset
+SYSTEM.CPU CortexA7MPCore
+;System.Option Cflush on    	;flush the cache to avoid data consistency
+SYSTEM.OPTION ENRESET OFF
+SYSTEM.OPTION TRST OFF
+SYStem.Option ResBreak OFF
+SYStem.Option WaitReset OFF
+SYStem.JtagClock 5MHz
+
+;R-T Memory Access
+SYSTEM.MULTICORE MEMORYACCESSPORT 0
+SYSTEM.MULTICORE DEBUGACCESSPORT 1
+
+;Setting Core debug register access
+if &NR_CPUS==1
+(
+
+    ;Setting Core debug register access
+    SYStem.CONFIG CORENUMBER 1;
+    SYSTEM.MULTICORE COREBASE 0x80070000
+)
+else
+(
+
+;Setting Core debug register access
+    SYSTEM.CONFIG CORENUMBER 4;
+    SYSTEM.CONFIG COREBASE 0x80070000 0x80072000 0x80074000 0x80076000;
+
+)
+ConnectGo
+
+wait 1.ms
+SYStem.Up
+
+; set_hw_breakpoint_by_def
+; setting attribute of breakpoints
+Break.Select Program OnChip
+Break.Select Hll OnChip
+;Break.Select Spot OnChip
+Break.Select Read OnChip
+Break.Select Write OnChip
+
+d.s c:0x10000000 %le %long 0x22000024;disable wdt
+break.set A:0xC0000000 /write /onchip /cmd "D.S A:0xC0000000 %LE %LONG 0x22000024" /resume
+
+; disable DABORT and PABORT breakpoint
+tronchip.set dabort off
+tronchip.set pabort off
+tronchip.set undef  off
+
+; 
+; Linux kernel init
+;
+
+&KernelPath="../../../../kernel/out"
+
+if OS.FILE(&KernelPath/vmlinux)
+(
+print "loading Linux kernel symbols..."
+Data.LOAD.Elf &KernelPath/vmlinux /gnu /nocode
+wait 100.ms
+)
+else
+(
+print "can't find vmlinux, select it manually"
+Dialog.file *.elf
+entry &elf
+if OS.FILE("&elf")
+(
+Data.LOAD.Elf "&elf" /gnu /nocode
+wait 100.ms
+)
+)
+
+y.spath.reset
+y.spath.srd ../../../../kernel/init
+y.spath.srd ../../../../kernel/mm
+y.spath.srd ../../../../kernel/kernel
+y.spath.srd ../../../../kernel/kernel/irq
+y.spath.srd ../../../../kernel/arch/arm/kernel
+y.spath.srd ../../../../kernel/arch/arm/mm
+y.spath.srd ../../../../kernel/arch/arm/lib
+y.spath.srd ../../../../kernel/lib
+y.spath.srd ../../../../kernel/drivers/serial
+
+
+; Setup Linx awareness
+TASK.CONFIG linux       ; loads Linux awareness (linux.t32)
+MENU.ReProgram linux    ; loads Linux menu (linux.men)
+HELP.FILTER.Add rtoslinux  ; add linux awareness manual to help filter
+
+;winclear
+;winpos 0% 0% 50% 50%
+;d.l
+;winpos 0% 50% 50% 20%
+;sYmbol.Browse
+;winpos 0% 70% 50% 30%
+;Break.List
+;winpos 50% 0% 50% 50%
+;Register
+;winpos 50% 50% 50% 50%
+;Var.Frame /l /c
+;go
+d.l
+
+enddo
+

@@ -1,0 +1,198 @@
+;;================================================
+;; CHIP:        MT6572
+;; PURPOSE:     LPDDR2 EVB Linux Kernel Ram Booting (to Shell)
+;; DEPENDENCY:  rootfs_mt6572_fpga.gz preloader_mt6572_evb1.elf
+;; CREATE_DATE: 2013/02/23
+;; NOTE:        AP Log on UART1
+;;================================================
+;;-> <<< Parameters >>>
+;;================================================
+;; Constant
+;;================================================
+;;-> # Constant: Platform Parameters
+&CONST_DRAM_PHYS_START=0x80100000
+&CONST_CORENUM=2
+
+;;================================================
+;; Options
+;;================================================
+;;-> # Option: Load Path Settings
+;; OPT_KERNEL_PATH: ALPS code base kernel path ex: xxx\alps\kernel
+&OPT_CTP_PATH
+&OPT_LDVT_PATH
+&OPT_KERNEL_PATH="..\..\..\..\kernel"
+
+
+;;-> # Option: Serial Wire or Parallel JTAG
+;; 0: Parallel
+;; 1: Serial Wire
+&OPT_JTAG=0
+
+;; OPT_DRAM_SIZE (Affect kernel ram usage)
+&OPT_DRAM_SIZE=0x20000000
+
+;;-> # Option: Kernel Parameters
+&OPT_KERN_PHYS_START=&CONST_DRAM_PHYS_START
+&OPT_KERN_RAMDISK_PATH="../mt6572td_evb1_ldvt_ramdisk.img" ;; BusyBox
+&OPT_KERN_RAMDISK_START=&OPT_KERN_PHYS_START+0x02600000
+&OPT_KERN_RAMDISK_SIZE=OS.FILE.SIZE(&OPT_KERN_RAMDISK_PATH)
+&OPT_KERN_ATAGS_START=&OPT_KERN_PHYS_START+0x00000100
+
+;;================================================
+;; Control Code
+;;================================================
+;;->   
+;;-> <<< Control Code >>>
+;;-> @ APMCU Connection
+SYStem.RESet
+SYStem.Option ENRESET ON
+SYStem.Option ResBreak OFF
+SYStem.Option WaitReset OFF
+SYStem.JtagClock 10.MHz
+SYStem.CPU CortexA7MPCore
+SYStem.CONFIG CORENUMBER &CONST_CORENUM
+SYStem.CONFIG COREBASE 0x80070000 0x80072000
+IF &OPT_JTAG==0
+(
+System.CONFIG SWDP OFF
+)
+ELSE IF &OPT_JTAG==1
+(
+System.CONFIG SWDP ON  
+)
+SYStem.Up
+
+;;-> @ APMCU Environment Setting
+;; disable WDT
+d.s asd:0x10007000 %le %long 0x22000000
+
+;;-> @ Kernel Ram Booting
+    
+    print "[INFO][MAIN] Linux Kernel Ram Booting"
+    ; set L2 as share memory (128 KB, Preloader is placed in L2)
+    D.S SD:0x10200000 %LE %LONG 0x00000000
+    d.load.elf preloader_mt6572_evb1.elf
+    go
+    wait 3.s
+    break
+    D.S SD:0x10200000 %LE %LONG 0x00000020
+    ;GOSUB SET_PLL
+    ;GOSUB SET_EMI
+    
+    system.down
+    SYStem.CONFIG CORENUMBER 1
+    SYStem.Option ENRESET OFF
+    system.up
+    
+    print "[INFO][MAIN] Loading Linux Kernel Image ..."
+    LoadImage &OPT_KERNEL_PATH\out\vmlinux (&OPT_KERN_PHYS_START)-0xC0000000 %GNU %BIN
+    
+    system.down
+    SYStem.CONFIG CORENUMBER &CONST_CORENUM
+    SYStem.Option ENRESET OFF
+    system.up
+    
+    print "[INFO][MAIN] Setting ATAGS ..."
+    GOSUB SET_KERNEL_ATAGS
+    
+    Register.RESet
+    Register.Set PC &OPT_KERN_PHYS_START+0x8000 ; Set PC on start address of image
+    Register.Set R1 0x19AC ; Set machine type in R1; see arch/arm/tools/mach-types  ; 0x19AC = 6572
+    Register.Set R2 &OPT_KERN_ATAGS_START ; Set R2 to start addr of ATAG list
+    
+    print "[INFO][MAIN] Loading Ramdisk Image ..."
+    Data.LOAD.Binary &OPT_KERN_RAMDISK_PATH &OPT_KERN_RAMDISK_START /noclear /nosymbol /quad
+    
+    print "[INFO][MAIN] Loading Linux Kernel Symbols ..."
+    LoadImage &OPT_KERNEL_PATH\out\vmlinux %GNU %SYMBOL
+    
+    GOSUB SET_KERNEL_SPATH
+    
+    TASK.CONFIG linux          ; loads Linux awareness (linux.t32)
+    MENU.ReProgram linux       ; loads Linux menu (linux.men)
+    HELP.FILTER.Add rtoslinux  ; add linux awareness manual to help filter
+
+;;->   
+;;-> <<< COMMON SCRIPT FOOTER >>>
+;;-> @ Set default breakpoints to HW
+Break.Select Program OnChip
+Break.Select Hll OnChip
+Break.Select Spot OnChip
+Break.Select Read OnChip
+Break.Select Write OnChip
+
+;; List code
+d.l
+
+END
+
+;;->   
+;;-> <<< FUCNTIONS >>>
+SET_KERNEL_ATAGS:
+    LOCAL &BootArgStart &BootArgEnd &tagAddr
+    &BootArgStart=&OPT_KERN_ATAGS_START
+    &BootArgEnd=&BootArgStart+0x743
+    Data.Set &BootArgStart--&BootArgEnd 0    ; clear parameter area
+    &tagAddr=&BootArgStart
+    ; ATAG_CORE
+    data.set &tagAddr %LONG %LE 0x2
+    &tagAddr=&tagAddr+0x4
+    data.set &tagAddr  %LONG %LE 0x54410001
+    &tagAddr=&tagAddr+0x4
+    ; ATAG_MEM , First memory bank
+    data.set &tagAddr %LONG %LE 0x4
+    &tagAddr=&tagAddr+0x4
+    data.set &tagAddr %LONG %LE 0x54410002
+    &tagAddr=&tagAddr+0x4
+    data.set &tagAddr %LONG %LE &CONST_DRAM_PHYS_START+&OPT_DRAM_SIZE-&OPT_KERN_PHYS_START ;; Size
+    &tagAddr=&tagAddr+0x4
+    data.set &tagAddr %LONG %LE &OPT_KERN_PHYS_START ;; Start
+    &tagAddr=&tagAddr+0x4
+    ; ATAG_CMDLINE
+    data.set &tagAddr %LONG %LE 0x12 ;= 2 + (len(cmdline) + 3)/4
+    &tagAddr=&tagAddr+0x4
+    data.set &tagAddr %LONG %LE 0x54410009
+    &tagAddr=&tagAddr+0x4
+    data.set &tagAddr "console=tty0 console=ttyMT0,921600n1 rdinit=/sbin/init root=/dev/ram" 0x0
+    &tagAddr=&tagAddr+0x40
+    ; ATAG_INITRD2
+    data.set &tagAddr %LONG %LE 0x4
+    &tagAddr=&tagAddr+0x4
+    data.set &tagAddr %LONG %LE 0x54420005
+    &tagAddr=&tagAddr+0x4
+    data.set &tagAddr %LONG %LE &OPT_KERN_RAMDISK_START
+    &tagAddr=&tagAddr+0x4
+    data.set &tagAddr %LONG %LE &OPT_KERN_RAMDISK_SIZE
+    &tagAddr=&tagAddr+0x4
+    ; ATAG_RAMDISK
+    data.set &tagAddr %LONG %LE 0x5
+    &tagAddr=&tagAddr+0x4
+    data.set &tagAddr %LONG %LE 0x54410004
+    &tagAddr=&tagAddr+0x4
+    data.set &tagAddr %LONG %LE 1
+    &tagAddr=&tagAddr+0x4
+    data.set &tagAddr %LONG %LE 0x2CCCCC
+    &tagAddr=&tagAddr+0x4
+    data.set &tagAddr %LONG %LE &OPT_KERN_RAMDISK_START
+    &tagAddr=&tagAddr+0x4
+    ; ATAG_NONE
+    data.set &tagAddr %LONG %LE 0x0
+    &tagAddr=&tagAddr+0x4
+    data.set &tagAddr %LONG %LE 0x0
+    &tagAddr=&tagAddr+0x4
+    RETURN
+
+SET_KERNEL_SPATH:
+    LOCAL &KERN_PATH
+    &KERN_PATH="&OPT_KERNEL_PATH"
+    y.spath.reset
+    y.spath.srd &KERN_PATH/init
+    y.spath.srd &KERN_PATH/irq
+    y.spath.srd &KERN_PATH/arch/arm/kernel
+    y.spath.srd &KERN_PATH/arch/arm/boot
+    y.spath.srd &KERN_PATH/arch/arm/mm
+    y.spath.srd &KERN_PATH/../mediatek/platform/mt6572/kernel/core
+    y.spath.srd &KERN_PATH/../mediatek/platform/mt6572/kernel/drivers
+    y.spath.srd &KERN_PATH/../mediatek/platform/mt6572/kernel/core/include/mach
+    RETURN
+    

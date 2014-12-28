@@ -1,0 +1,79 @@
+&NR_CPUS=4
+
+SYStem.RESet
+SYStem.Option EnReset ON
+SYStem.Option ResBreak OFF
+SYStem.Option WaitReset OFF
+SYStem.JtagClock 10.MHz
+
+SYStem.CPU CortexA7MPCore
+
+if &NR_CPUS==1
+(
+    ;Setting Core debug register access
+    SYStem.CONFIG CORENUMBER 1
+    SYSTEM.MultiCore COREBASE 0x80070000
+)
+else
+(
+    ;Setting Core debug register access
+    SYStem.CONFIG CORENUMBER 4
+    SYStem.CONFIG COREBASE 0x80070000 0x80072000 0x80074000 0x80076000
+)
+
+SYStem.Up
+; disable WDT
+Data.Set asd:0x10000000 %le %long 0x22000024
+
+; disable DABORT and PABORT breakpoint
+TrOnchip.Set dabort off
+TrOnchip.Set pabort off
+TrOnchip.Set undef off
+TrOnchip.Set irq off
+
+&KernelPath="../../../../kernel"
+
+if OS.FILE(&KernelPath/out/vmlinux)
+(
+    print "loading Linux kernel symbols..."
+    &searchStr="alps"
+    &pathlen=STRing.SCAN(OS.PWD(),"&searchStr",0)+STRing.LEN("&searchStr")
+    &alpsPath=STRing.MID(OS.PWD(), 0, &pathlen)
+    Data.LOAD.Elf &KernelPath/out/vmlinux /gnu /nocode /StripPART "&searchStr" /PATH "&alpsPath"
+
+    wait 100.ms
+)
+else
+(
+    print "can't find vmlinux"
+)
+
+Y.SPATH.RESET ; reset all source path
+Y.SPATH.SRD ../../../../mediatek/platform/mt6589/kernel
+Y.SPATH.SRD ../../../../mediatek/source/kernel
+Y.SPATH.SRD ../../../../mediatek/custom/out/&project/kernel
+Y.SPATH.SRD ../../../../kernel/mm
+Y.SPATH.SRD ../../../../kernel/kernel
+Y.SPATH.SRD ../../../../kernel/arch/arm/kernel
+Y.SPATH.SRD ../../../../kernel/arch/arm/mm
+Y.SPATH.SRD ../../../../kernel/arch/arm/lib
+Y.SPATH.SRD ../../../../kernel/lib
+
+; Setup Linx awareness
+TASK.CONFIG linux       ; loads Linux awareness (linux.t32)
+MENU.ReProgram linux    ; loads Linux menu (linux.men)
+HELP.FILTER.Add rtoslinux  ; add linux awareness manual to help filter
+
+Data.List
+
+on pbreak gosub
+(
+    if Data.Long(asd:0x10000000)!=0x00000024
+    (
+        Data.Set asd:0x10000000 %long 0x22000024
+    )
+)
+
+stop
+end
+enddo

@@ -1,0 +1,57 @@
+; disable WDT
+d.s c:0x10000000 %le %long 0x22000024
+&KernelPath="../../../../kernel/out/"
+&RamdiskImg="../mt6589_evb1_ldvt_ramdisk.img"
+&PhyRamStart=0x81600000
+;FIXED 1 rank, total 128M when Porting
+&LimitRam=0x8000000
+&KernelStart=&PhyRamStart+0x8000
+&RamdiskStart=&PhyRamStart+0x01900000
+&RamdiskSize=OS.FILE.SIZE(&RamdiskImg)
+print "loading Linux image..."
+data.load.binary &KernelPath/arch/arm/boot/Image &KernelStart
+
+print "loading ram disk"
+Data.LOAD.Binary &RamdiskImg &RamdiskStart /noclear /nosymbol /quad
+
+print "loading bootloader..."
+data.load.elf mt6589_fpga_bl.axf /gnu 
+
+print "loading Linux kernel symbols..."
+Data.LOAD.Elf &KernelPath/vmlinux /gnu /nocode
+
+
+
+;GPIO power domain
+d.s c:0x1020C920 %le %long 0x00000058
+d.s c:0x1020C920 %le %long 0x000000FA
+d.s c:0x1020C920 %le %long 0x00000065
+d.s c:0x1020C920 %le %long 0x00000083
+d.s c:0x10005900 %le %long 0x00002082
+d.s c:0x1020C920 %le %long 0x00000000
+d.s c:0x1020C920 %le %long 0x00000000
+d.s c:0x1020C920 %le %long 0x00000000
+d.s c:0x1020C920 %le %long 0x00000000
+
+D.S C15:0x12 0				; Turn off icache
+r.s r7 OS.FILE.SIZE(&RamdiskImg)
+if &NR_CPUS==1
+(
+    core.select 0
+    r.s pc 0x80100000
+)
+else
+(
+    core.select 1
+    r.s pc 0x80100000
+    core.select 2
+    r.s pc 0x80100000
+    core.select 3
+    r.s pc 0x80100000
+    core.select 0
+    r.s pc 0x80100000
+)
+
+
+d.l
+

@@ -1,0 +1,112 @@
+SYSTEM.Reset
+SYStem.CPU CortexA9MPCoreSMP2
+System.Option Cflush on    	;flush the cache to avoid data consistency
+SYSTEM.OPTION ENRESET On
+SYSTEM.OPTION TRST On
+SYStem.Option ResBreak OFF
+SYStem.Option WaitReset OFF
+SYStem.JtagClock 5MHz
+
+;R-T Memory Access
+SYSTEM.MULTICORE MEMORYACCESSPORT 0
+SYSTEM.MULTICORE DEBUGACCESSPORT 1
+
+;Setting Core debug register access
+SYSTEM.MULTICORE COREBASE APB:0x80070000 0x80072000
+
+sys.mode go
+
+wait 1.ms
+break
+
+; set_hw_breakpoint_by_def
+; setting attribute of breakpoints
+Break.Select Program OnChip
+Break.Select Hll OnChip
+;Break.Select Spot OnChip
+Break.Select Read OnChip
+Break.Select Write OnChip
+
+D.S A:0xC0000000 %LE %LONG 0x00002226 ;disable wdt
+
+; disable DABORT and PABORT breakpoint
+tronchip.set dabort off
+tronchip.set pabort off
+tronchip.set undef off
+
+; 
+; Linux kernel init
+;
+
+&KernelPath="../../../../kernel"
+
+if OS.FILE(&KernelPath/out/vmlinux)
+(
+print "loading Linux kernel symbols..."
+Data.LOAD.Elf &KernelPath/out/vmlinux /gnu /nocode
+wait 100.ms
+)
+else
+(
+print "can't find vmlinux"
+)
+
+y.spath.reset
+y.spath.srd &KernelPath/init
+y.spath.srd &KernelPath/mm
+y.spath.srd &KernelPath/kernel
+y.spath.srd &KernelPath/kernel/irq
+y.spath.srd &KernelPath/arch/arm/kernel
+y.spath.srd &KernelPath/arch/arm/mm
+y.spath.srd &KernelPath/arch/arm/lib
+y.spath.srd &KernelPath/arch/arm/mach-mt6575
+y.spath.srd &KernelPath/lib
+y.spath.srd &KernelPath/drivers/serial
+y.spath.srd &KernelPath/arch/arm/mach-mt6575
+
+; Setup Linx awareness
+TASK.CONFIG linux       ; loads Linux awareness (linux.t32)
+MENU.ReProgram linux    ; loads Linux menu (linux.men)
+HELP.FILTER.Add rtoslinux  ; add linux awareness manual to help filter
+
+; jump to BROM
+Register.Set PC a:0xffff0000
+
+winclear
+winpos 0% 0% 50% 50%
+d.l
+;winpos 0% 50% 50% 20%
+;sYmbol.Browse
+;winpos 0% 70% 50% 30%
+;Break.List
+
+;winpos 50% 0% 50% 50%
+;Register
+;winpos 50% 50% 50% 50%
+;Var.Frame /l /c
+
+
+
+; stop before kernel booting
+;&PhyRamStart=0x2200000
+;&KernelStart=&PhyRamStart+0x8000
+;b.s &KernelStart /onchip /cmd "b.delete &KernelStart"
+;
+;go
+
+&var=0xc0000000
+&value=0x00002224
+
+on pbreak gosub
+(
+	if data.long(asd:0xc0000000)!=0x00002224
+	(
+		data.set asd:&var  %long &value
+	)
+)
+
+stop
+end
+
+enddo
+

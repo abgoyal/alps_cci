@@ -1,0 +1,259 @@
+&NR_CPUS=4
+&PRELOADER_DONE=0
+&KERNEL_DONE=0
+&RAMDISK_DONE=0
+&BOOTLOADER_DONE=0
+&SYMBOL_DONE=0
+&REST_INIT_DONE=0
+&CPU1_DONE=0
+&CPU2_DONE=0
+&CPU3_DONE=0
+&INIT_DONE=0
+
+SYStem.RESet
+SYStem.Option EnReset ON
+SYStem.Option ResBreak OFF
+SYStem.Option WaitReset OFF
+SYStem.JtagClock 10.MHz
+
+SYStem.CPU CortexA7MPCore
+
+IF &NR_CPUS==1
+(
+    ;Setting Core debug register access
+    SYStem.CONFIG CORENUMBER 1
+    SYStem.MultiCore COREBASE 0x80070000
+)
+ELSE
+(
+    ;Setting Core debug register access
+    SYStem.CONFIG CORENUMBER 4
+    SYStem.CONFIG COREBASE 0x80070000 0x80072000 0x80074000 0x80076000
+)
+
+SYStem.Up
+; disable WDT
+Data.Set asd:0x10000000 %le %long 0x22000024
+
+
+; disable DABORT and PABORT breakpoint
+TrOnchip.Set dabort off
+TrOnchip.Set pabort off
+TrOnchip.Set undef off
+TrOnchip.Set irq off
+
+; board init
+PRINT "loading pre-loader image"
+Data.LOAD.Elf preloader.elf
+
+RUN_PRELOADER:
+&PRELOADER_DONE=1
+Go
+wait 2000.ms
+Break
+
+LOAD_KERNEL:
+&KERNEL_DONE=1
+&KernelPath="../../../../kernel/"
+&RamdiskImg="rootfs_mt6589.gz"
+&PhyRamStart=0x80000000
+&LimitRam=0x20000000
+&KernelStart=&PhyRamStart+0x8000
+&RamdiskStart=&PhyRamStart+0x02600000
+&RamdiskSize=OS.FILE.SIZE(&RamdiskImg)
+
+PRINT "loading Linux image..."
+Data.LOAD.Binary &KernelPath/out/arch/arm/boot/Image &KernelStart
+
+LOAD_RAMDISK:
+&RAMDISK_DONE=1
+PRINT "loading ram disk"
+Data.LOAD.Binary &RamdiskImg &RamdiskStart /noclear /nosymbol /quad
+
+LOAD_BOOTLOADER:
+&BOOTLOADER_DONE=1
+PRINT "loading bootloader..."
+Data.LOAD.Elf mt6589_fpga_bl.axf /gnu
+
+
+LOAD_SYMBOL:
+&SYMBOL_DONE=1
+IF OS.FILE(&KernelPath/out/vmlinux)
+(
+    PRINT "loading Linux kernel symbols..."
+    &searchStr="alps"
+    &pathlen=STRing.SCAN(OS.PWD(),"&searchStr",0)+STRing.LEN("&searchStr")
+    &alpsPath=STRing.MID(OS.PWD(), 0, &pathlen)
+    Data.LOAD.Elf &KernelPath/out/vmlinux /gnu /nocode /StripPART "&searchStr" /PATH "&alpsPath"
+    wait 100.ms
+)
+ELSE
+(
+    PRINT "can't find vmlinux"
+)
+
+REST_INIT:
+&REST_INIT_DONE=1
+;GPIO power domain
+Data.Set asd:0x1020C920 %le %long 0x00000058
+Data.Set asd:0x1020C920 %le %long 0x000000FA
+Data.Set asd:0x1020C920 %le %long 0x00000065
+Data.Set asd:0x1020C920 %le %long 0x00000083
+Data.Set asd:0x10005900 %le %long 0x00002082
+Data.Set asd:0x1020C920 %le %long 0x00000000
+Data.Set asd:0x1020C920 %le %long 0x00000000
+Data.Set asd:0x1020C920 %le %long 0x00000000
+Data.Set asd:0x1020C920 %le %long 0x00000000
+
+
+; Setup Linx awareness
+TASK.CONFIG linux       ; loads Linux awareness (linux.t32)
+MENU.ReProgram linux    ; loads Linux menu (linux.men)
+HELP.FILTER.Add rtoslinux  ; add linux awareness manual to help filter
+Register.Set R7 OS.FILE.SIZE(&RamdiskImg)
+IF &NR_CPUS==1
+(
+    CORE.select 0
+    Register.Set PC &KernelStart ; Set PC on start address of image
+)
+ELSE
+(
+    CORE.select 1
+    Register.Set PC 0x90100000
+
+SET_CPU1:
+    &CPU1_DONE=1
+    CORE.select 2
+    Register.Set PC 0x90100000
+
+SET_CPU2:
+    &CPU2_DONE=1
+    CORE.select 3
+    Register.Set PC 0x90100000
+    
+SET_CPU3:
+	&CPU3_DONE=1
+    CORE.select 0
+)
+
+PRINT "set boot parameters"
+&BootArgStart=&PhyRamStart+0x100
+&BootArgEnd=&BootArgStart+0x700
+Data.Set &BootArgStart--&BootArgEnd 0    ; clear parameter area
+&tagAddr=&BootArgStart
+; ATAG_CORE
+Data.Set &tagAddr %LONG %LE 0x2
+&tagAddr=&tagAddr+0x4
+Data.Set &tagAddr  %LONG %LE 0x54410001
+&tagAddr=&tagAddr+0x4
+; ATAG_MEM , First memory bank
+Data.Set &tagAddr %LONG %LE 0x4
+&tagAddr=&tagAddr+0x4
+Data.Set &tagAddr %LONG %LE 0x54410002
+&tagAddr=&tagAddr+0x4
+Data.Set &tagAddr %LONG %LE &LimitRam // size
+&tagAddr=&tagAddr+0x4
+Data.Set &tagAddr %LONG %LE &PhyRamStart // start
+&tagAddr=&tagAddr+0x4
+; ATAG_CMDLINE
+Data.Set &tagAddr %LONG %LE 0x22 ;= 2 + (len(cmdline) + 3)/4
+&tagAddr=&tagAddr+0x4
+Data.Set &tagAddr %LONG %LE 0x54410009
+&tagAddr=&tagAddr+0x4
+; Data.Set &tagAddr "console=tty0 console=ttyMT3,921600n1 rdinit=/sbin/init root=/dev/ram lcm=1-nt35582_mcu_6575" 0x0
+Data.Set &tagAddr "console=tty0 console=ttyMT3,921600n1 rdinit=/sbin/init root=/dev/ram lcm=1-nt35582_mcu_6575 printk.disable_uart=0 boot_reason=0" 0x0
+&tagAddr=&tagAddr+0x80
+; ATAG_INITRD2
+Data.Set &tagAddr %LONG %LE 0x4
+&tagAddr=&tagAddr+0x4
+Data.Set &tagAddr %LONG %LE 0x54420005
+&tagAddr=&tagAddr+0x4
+Data.Set &tagAddr %LONG %LE &RamdiskStart
+&tagAddr=&tagAddr+0x4
+Data.Set &tagAddr %LONG %LE &RamdiskSize
+&tagAddr=&tagAddr+0x4
+; ATAG_RAMDISK
+Data.Set &tagAddr %LONG %LE 0x5
+&tagAddr=&tagAddr+0x4
+Data.Set &tagAddr %LONG %LE 0x54410004
+&tagAddr=&tagAddr+0x4
+Data.Set &tagAddr %LONG %LE 1
+&tagAddr=&tagAddr+0x4
+Data.Set &tagAddr %LONG %LE 0x2CCCCC
+&tagAddr=&tagAddr+0x4
+Data.Set &tagAddr %LONG %LE &RamdiskStart
+&tagAddr=&tagAddr+0x4
+; ATAG_NONE
+Data.Set &tagAddr %LONG %LE 0x0
+&tagAddr=&tagAddr+0x4
+Data.Set &tagAddr %LONG %LE 0x0
+&tagAddr=&tagAddr+0x4
+
+Register.Set PC &KernelStart ; Set PC on start address of image
+Register.Set R1 0x19BD ; Set machine type in R1; see arch/arm/tools/mach-types  ; 0x19AC = 6589
+Register.Set R2 &BootArgStart ; Set R2 to start addr of ATAG list
+
+FINAL_STEP:
+&INIT_DONE=1
+Data.List
+;Go
+
+ON pbreak GOTO
+(
+    IF &PRELOADER_DONE==0
+    (
+        GOTO RUN_PRELOADER
+    )
+
+    IF &KERNEL_DONE==0
+    (
+        GOTO LOAD_KERNEL
+    )
+
+    IF &RAMDISK_DONE==0
+    (
+        GOTO LOAD_RAMDISK
+    )
+
+    IF &BOOTLOADER_DONE==0
+    (
+        GOTO LOAD_BOOTLOADER
+    )
+
+    IF &SYMBOL_DONE==0
+    (
+        GOTO LOAD_SYMBOL
+    )
+
+    IF &REST_INIT_DONE==0
+    (
+        GOTO REST_INIT
+    )
+
+    IF &CPU1_DONE==0
+    (
+        GOTO SET_CPU1
+    )
+
+    IF &CPU2_DONE==0
+    (
+        GOTO SET_CPU2
+    )
+
+    IF &CPU3_DONE==0
+    (
+        GOTO SET_CPU3
+    )
+
+    IF &INIT_DONE==0
+    (
+        GOTO FINAL_STEP
+    )
+
+    IF Data.Long(asd:0x10000000)!=0x00000024
+    (
+        Data.Set asd:0x10000000 %long 0x22000024
+    )
+)
+
+ENDDO

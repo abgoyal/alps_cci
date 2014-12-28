@@ -1,0 +1,240 @@
+&NR_CPUS=2
+
+SYStem.RESet;
+SYStem.Option ENRESET ON;
+SYStem.Option ResBreak OFF;
+SYStem.Option WaitReset ON;
+
+SYStem.JtagClock 10.MHz;
+
+SYStem.CPU CortexA7MPCore;
+           
+; Use single core to download kernel Image
+; For some reason, single core downloading is faster
+SYStem.CONFIG CORENUMBER 1;
+SYStem.CONFIG COREBASE 0x80070000;
+
+SYStem.Up;
+
+core.select 0
+
+; disable WDT
+D.S SD:0x10007000 %LE %LONG 0x22000000
+
+; Sysmem
+D.S SD:0x10001808 %LE %LONG 0x00000000
+
+;EMI Setting
+D.S SD:0x10000000 %LE %LONG 0x22000064
+&EMI_REG=0x10004000
+; LPDDR2
+    D.S SD:(&EMI_REG+0x0088) %LE %LONG 0x00030000		;EMI_GEND	0x0001_0000
+    D.S SD:(&EMI_REG+0x0070) %LE %LONG 0x00000202		;EMI_GENA	0x0000_0202
+    D.S SD:(&EMI_REG+0x0068) %LE %LONG 0x00350801		;EMI_CONN	0x0035_0801
+
+    wait 1.ms
+
+    D.S SD:(&EMI_REG+0x0070) %LE %LONG 0x00000212		;EMI_GENA	0x0000_0212
+    D.S SD:(&EMI_REG+0x0040) %LE %LONG 0x003f0000		;EMI_CONI	0x003f_0000
+    
+    D.S SD:(&EMI_REG+0x0048) %LE %LONG 0x00021011		;EMI_CONJ	0x0002_1011
+    D.S SD:(&EMI_REG+0x0050) %LE %LONG 0x020B0100		;EMI_CONK	0x020B_0100
+    D.S SD:(&EMI_REG+0x0058) %LE %LONG 0x20423096		;EMI_CONL	0x2042_3096
+    
+    D.S SD:(&EMI_REG+0x0700) %LE %LONG 0x00400040		;EMI_DQSA	0x0040_0040
+    D.S SD:(&EMI_REG+0x0708) %LE %LONG 0x00400040		;EMI_DQSB	0x0040_0040
+    D.S SD:(&EMI_REG+0x0710) %LE %LONG 0x00400040		;EMI_DQSC	0x0040_0040
+    D.S SD:(&EMI_REG+0x0718) %LE %LONG 0x00400040		;EMI_DQSD	0x0040_0040
+    
+;    D.S SD:(&EMI_REG+0x0240) %LE %LONG 0x00000001		;EMI_IDLI	0x0000_0001
+    
+    D.S SD:(&EMI_REG+0x0318) %LE %LONG 0x88888888		;EMI_DRVA	0x8888_8888
+    D.S SD:(&EMI_REG+0x0320) %LE %LONG 0x00880000		;EMI_DRVB	0x0088_0000
+    
+    D.S SD:(&EMI_REG+0x0308) %LE %LONG 0x55050555		;EMI_DUTB	0x5505_0555
+
+    wait 1.ms
+
+; LPDDR2 init flow
+    D.S SD:(&EMI_REG+0x0068) %LE %LONG 0x20350801		;EMI_CONN	0x2035_0801
+    wait 1.ms
+    D.S SD:(&EMI_REG+0x0068) %LE %LONG 0x00350801		;EMI_CONN	0x0035_0801
+    wait 1.ms
+    
+    D.S SD:(&EMI_REG+0x0040) %LE %LONG 0x00000000		;EMI_CONI	0x0000_0000
+    D.S SD:(&EMI_REG+0x0080) %LE %LONG 0x00000010		;EMI_DDRV	0x0000_0010
+    D.S SD:(&EMI_REG+0x0068) %LE %LONG 0x40350801		;EMI_CONN	0x4035_0801
+    wait 1.ms
+    D.S SD:(&EMI_REG+0x0068) %LE %LONG 0x00350801		;EMI_CONN	0x0035_0801
+    wait 1.ms
+    
+    D.S SD:(&EMI_REG+0x0040) %LE %LONG 0x23010000		;EMI_CONI	0x2301_0000
+    D.S SD:(&EMI_REG+0x0068) %LE %LONG 0x20350801		;EMI_CONN	0x2035_0801
+    wait 1.ms
+    D.S SD:(&EMI_REG+0x0068) %LE %LONG 0x00350801		;EMI_CONN	0x0035_0801
+    wait 1.ms
+    
+    D.S SD:(&EMI_REG+0x0040) %LE %LONG 0x02020000		;EMI_CONI	0x0202_0000
+    D.S SD:(&EMI_REG+0x0068) %LE %LONG 0x20350801		;EMI_CONN	0x2035_0801
+    wait 1.ms
+    D.S SD:(&EMI_REG+0x0068) %LE %LONG 0x00350801		;EMI_CONN	0x0035_0801
+    wait 1.ms
+    
+    D.S SD:(&EMI_REG+0x0068) %LE %LONG 0x00350907		;EMI_CONN	0x0035_0907
+    D.S SD:(&EMI_REG+0x0158) %LE %LONG 0x00030001		;EMI_ABCT	0x0003_0001
+    D.S SD:(&EMI_REG+0x0078) %LE %LONG 0x00000001		;EMI_DRCT	0x0000_0001
+    D.S SD:(&EMI_REG+0x0090) %LE %LONG 0xFFFFFF00		;EMI_PPCT	0xFFFF_FF00
+    D.S SD:(&EMI_REG+0x0070) %LE %LONG 0x0000021A		;EMI_GENA	0x0000_021A
+    wait 1.ms
+; END
+
+&KernelPath="../../../../kernel"
+
+&RamdiskImg="../../../../out/target/product/mt6572_fpga/android_rootfs.bin"
+&PhyRamStart=0x80100000
+&LimitRam=0xA0000000-&PhyRamStart 
+&RamdiskStart=&PhyRamStart+0x02600000
+&RamdiskSize=OS.FILE.SIZE(&RamdiskImg)
+
+&BootArgStart=&PhyRamStart+0x100
+&BootArgEnd=&BootArgStart+0x743
+&KernelStart=&PhyRamStart+0x8000
+&KernelStartVirt=0xC0000000
+&KernelEndVirt=&KernelStartVirt+0x01ffffff
+
+
+print "loading Linux image..."
+;data.LOAD.Elf &KernelPath/out/arch/arm/boot/compressed/vmlinux (&PhyRamStart+0x1600000) /gnu /nosymbol /quad
+LoadImage &KernelPath/out/vmlinux (&PhyRamStart)-&KernelStartVirt %GNU %BIN
+;Data.LOAD.Elf &KernelPath/out/vmlinux &PhyRamStart-&KernelStartVirt /gnu /nosymbol /quad
+
+print "set boot parameters"
+Data.Set &BootArgStart--&BootArgEnd 0    ; clear parameter area
+&tagAddr=&BootArgStart
+; ATAG_CORE
+data.set &tagAddr %LONG %LE 0x2
+&tagAddr=&tagAddr+0x4
+data.set &tagAddr  %LONG %LE 0x54410001
+&tagAddr=&tagAddr+0x4
+; ATAG_MEM , First memory bank
+data.set &tagAddr %LONG %LE 0x4
+&tagAddr=&tagAddr+0x4
+data.set &tagAddr %LONG %LE 0x54410002
+&tagAddr=&tagAddr+0x4
+data.set &tagAddr %LONG %LE &LimitRam // size
+&tagAddr=&tagAddr+0x4
+data.set &tagAddr %LONG %LE &PhyRamStart // start
+&tagAddr=&tagAddr+0x4
+; ATAG_CMDLINE
+data.set &tagAddr %LONG %LE 0x12 ;= 2 + (len(cmdline) + 3)/4
+&tagAddr=&tagAddr+0x4
+data.set &tagAddr %LONG %LE 0x54410009
+&tagAddr=&tagAddr+0x4
+data.set &tagAddr "console=tty0 console=ttyMT0,921600n1 rdinit=/sbin/init root=/dev/ram" 0x0
+&tagAddr=&tagAddr+0x40
+; ATAG_INITRD2
+data.set &tagAddr %LONG %LE 0x4
+&tagAddr=&tagAddr+0x4
+data.set &tagAddr %LONG %LE 0x54420005
+&tagAddr=&tagAddr+0x4
+data.set &tagAddr %LONG %LE &RamdiskStart
+&tagAddr=&tagAddr+0x4
+data.set &tagAddr %LONG %LE &RamdiskSize
+&tagAddr=&tagAddr+0x4
+; ATAG_RAMDISK
+data.set &tagAddr %LONG %LE 0x5
+&tagAddr=&tagAddr+0x4
+data.set &tagAddr %LONG %LE 0x54410004
+&tagAddr=&tagAddr+0x4
+data.set &tagAddr %LONG %LE 1
+&tagAddr=&tagAddr+0x4
+data.set &tagAddr %LONG %LE 0x2CCCCC
+&tagAddr=&tagAddr+0x4
+data.set &tagAddr %LONG %LE &RamdiskStart
+&tagAddr=&tagAddr+0x4
+; ATAG_NONE
+data.set &tagAddr %LONG %LE 0x0
+&tagAddr=&tagAddr+0x4
+data.set &tagAddr %LONG %LE 0x0
+&tagAddr=&tagAddr+0x4
+
+Register.RESet
+Register.Set PC &KernelStart ; Set PC on start address of image
+Register.Set R1 0x19AC ; Set machine type in R1; see arch/arm/tools/mach-types  ; 0x19AC = 6572
+Register.Set R2 &BootArgStart ; Set R2 to start addr of ATAG list
+
+print "loading ram disk"
+Data.LOAD.Binary &RamdiskImg &RamdiskStart /noclear /nosymbol /quad
+
+; Install Fake bootrom
+data.load.binary mt6572_fake_bootrom.bin 0x00400000
+;data.load.binary fake_bootrom_test.bin 0x01002400
+;d.s sd:0x10001400 %long %le 0x13800001
+;d.s sd:0x10001404 %long %le 0x01002400
+
+print "loading Linux kernel symbols..."
+;LoadImage &KernelPath/out/arch/arm/boot/compressed/vmlinux (&PhyRamStart+0x1600000) %GNU %SYMBOL
+;LoadImage &KernelPath/out/vmlinux (&PhyRamStart)-&KernelStartVirt %GNU %SYMBOL
+LoadImage &KernelPath/out/vmlinux %GNU %SYMBOL
+
+&KERN_PATH="../../../../kernel"
+y.spath.reset
+;y.spath.srd &KERN_PATH/drivers/
+y.spath.srd &KERN_PATH/init
+;y.spath.srd &KERN_PATH/mm
+;y.spath.srd &KERN_PATH/kernel
+y.spath.srd &KERN_PATH/irq
+y.spath.srd &KERN_PATH/arch/arm/kernel
+y.spath.srd &KERN_PATH/arch/arm/boot
+y.spath.srd &KERN_PATH/arch/arm/mm
+;y.spath.srd &KERN_PATH/arch/arm/lib
+;y.spath.srd &KERN_PATH/lib
+;y.spath.srd &KERN_PATH/drivers/serial
+y.spath.srd &KERN_PATH/../mediatek/platform/mt6572/kernel/core
+y.spath.srd &KERN_PATH/../mediatek/platform/mt6572/kernel/drivers
+y.spath.srd &KERN_PATH/../mediatek/platform/mt6572/kernel/core/include/mach
+y.spath.srd &KERN_PATH/../mediatek/kernel/drivers/usb20
+; Run over MMU & Interrupt initialization
+;go start_kernel /Onchip
+;wait !run()
+
+; Setup debugger MMU
+;MMU.Create &KernelStartVirt--&KernelEndVirt &PhyRamStart ; map kernel pages at RAM start
+;MMU.COMMON 0xc0000000--0xffffffff            ; common area for kernel and processes
+;MMU.ON 			              ; Turn on debugger's internal MMU translation
+;MMU.AUTOSCAN ON                                ; auto scan MMU translation table upon failing to access given virtual addr
+;MMU.SCANALL
+
+;; Reconnect target use 1 or 2 core setting
+SYStem.RESet;
+SYStem.Option ENRESET OFF;
+SYStem.Option ResBreak OFF;
+SYStem.Option WaitReset ON;
+
+SYStem.JtagClock 10.MHz;
+
+SYStem.CPU CortexA7MPCore;
+if &NR_CPUS==1
+(
+    SYStem.CONFIG CORENUMBER 1;
+    SYStem.CONFIG COREBASE 0x80070000;
+)
+else
+(
+	SYSTEM.CONFIG CORENUMBER 2;
+	SYSTEM.CONFIG COREBASE 0x80070000 0x80072000;
+)
+system.up
+; Setup Linx awareness
+TASK.CONFIG linux       ; loads Linux awareness (linux.t32)
+MENU.ReProgram linux    ; loads Linux menu (linux.men)
+HELP.FILTER.Add rtoslinux  ; add linux awareness manual to help filter
+
+Break.Select Program OnChip
+Break.Select Hll OnChip
+Break.Select Spot OnChip
+Break.Select Read OnChip
+Break.Select Write OnChip
+
+;winclear
+d.l

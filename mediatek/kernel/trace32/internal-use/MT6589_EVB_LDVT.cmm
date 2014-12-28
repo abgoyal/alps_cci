@@ -1,0 +1,221 @@
+&NR_CPUS=4
+&PRELOADER_DONE=0
+&KERNEL_DONE=0
+&RAMDISK_DONE=0
+&BOOTLOADER_DONE=0
+&SYMBOL_DONE=0
+&CPU1_DONE=0
+&CPU2_DONE=0
+&CPU3_DONE=0
+&INIT_DONE=0
+system.reset
+SYSTEM.OPTION ENRESET ON
+SYStem.Option ResBreak OFF
+SYStem.Option WaitReset OFF
+SYStem.JtagClock 10.MHz
+if &NR_CPUS==1
+(
+SYSTEM.CPU CortexA7MPCore
+)
+else
+(
+    SYStem.CPU CortexA7MPCore
+)
+
+if &NR_CPUS==1
+(
+
+    ;Setting Core debug register access
+    SYStem.CONFIG CORENUMBER 1;
+    SYSTEM.MULTICORE COREBASE 0x80070000
+)
+else
+(
+
+;Setting Core debug register access
+    SYSTEM.CONFIG CORENUMBER 4;
+    SYSTEM.CONFIG COREBASE 0x80070000 0x80072000 0x80074000 0x80076000;
+
+)
+
+SYStem.Up
+; disable WDT
+d.s asd:0x10000000 %le %long 0x22000024
+
+
+; disable DABORT and PABORT breakpoint
+tronchip.set dabort off
+tronchip.set pabort off
+tronchip.set undef off
+tronchip.set irq off
+;
+
+; board init
+print "loading pre-loader image"
+d.load.elf preloader.elf
+
+RUN_PRELOADER:
+&PRELOADER_DONE=1
+go
+wait 2000.ms
+break
+
+LOAD_KERNEL:
+&KERNEL_DONE=1
+&KernelPath="../../../../kernel/"
+&RamdiskImg="../mt6589_evb1_ldvt_ramdisk.img"
+&PhyRamStart=0x80000000
+;FIXED 1 rank, total 128M when Porting
+&LimitRam=0x8000000
+&KernelStart=&PhyRamStart+0x8000
+&RamdiskStart=&PhyRamStart+0x01900000
+&RamdiskSize=OS.FILE.SIZE(&RamdiskImg)
+
+print "loading Linux image..."
+data.load.binary &KernelPath/out/arch/arm/boot/Image &KernelStart
+
+LOAD_RAMDISK:
+&RAMDISK_DONE=1
+print "loading ram disk"
+Data.LOAD.Binary &RamdiskImg &RamdiskStart /noclear /nosymbol /quad
+
+LOAD_BOOTLOADER:
+&BOOTLOADER_DONE=1
+print "loading bootloader..."
+data.load.elf mt6589_fpga_bl.axf /gnu 
+
+
+LOAD_SYMBOL:
+&SYMBOL_DONE=1
+if OS.FILE(&KernelPath/out/vmlinux)
+(
+print "loading Linux kernel symbols..."
+Data.LOAD.Elf &KernelPath/out/vmlinux /gnu /nocode
+wait 100.ms
+)
+else
+(
+print "can't find vmlinux"
+)
+
+REST_INIT:
+&REST_INIT_DONE=1	
+;GPIO power domain
+d.s c:0x1020C920 %le %long 0x00000058
+d.s c:0x1020C920 %le %long 0x000000FA
+d.s c:0x1020C920 %le %long 0x00000065
+d.s c:0x1020C920 %le %long 0x00000083
+d.s c:0x10005900 %le %long 0x00002082
+d.s c:0x1020C920 %le %long 0x00000000
+d.s c:0x1020C920 %le %long 0x00000000
+d.s c:0x1020C920 %le %long 0x00000000
+d.s c:0x1020C920 %le %long 0x00000000
+
+
+Y.SPATH.RESET ; reset all source path
+Y.SPATH.SRD ../../../../mediatek/platform/mt6589/kernel
+Y.SPATH.SRD ../../../../mediatek/source/kernel
+Y.SPATH.SRD ../../../../mediatek/custom/out/&project/kernel
+Y.SPATH.SRD ../../../../kernel/mm
+Y.SPATH.SRD ../../../../kernel/kernel
+Y.SPATH.SRD ../../../../kernel/arch/arm/kernel
+Y.SPATH.SRD ../../../../kernel/arch/arm/mm
+Y.SPATH.SRD ../../../../kernel/arch/arm/lib
+Y.SPATH.SRD ../../../../kernel/lib
+
+; Setup Linx awareness
+TASK.CONFIG linux       ; loads Linux awareness (linux.t32)
+MENU.ReProgram linux    ; loads Linux menu (linux.men)
+HELP.FILTER.Add rtoslinux  ; add linux awareness manual to help filter
+r.s r7 OS.FILE.SIZE(&RamdiskImg)
+if &NR_CPUS==1
+(
+    core.select 0
+    r.s pc 0x90100000
+)
+else
+(
+    core.select 1
+    r.s pc 0x90100000
+
+SET_CPU1:
+    &CPU1_DONE=1
+    core.select 2
+    r.s pc 0x90100000
+
+SET_CPU2:
+    &CPU2_DONE=1
+    core.select 3
+    r.s pc 0x90100000
+    
+SET_CPU3:
+	&CPU3_DONE=1
+    core.select 0
+    r.s pc 0x90100000
+)
+
+FINAL_STEP:
+&INIT_DONE=1
+d.l
+;go
+on pbreak gosub
+(
+	if &PRELOADER_DONE==0
+	( 
+		goto RUN_PRELOADER
+	)
+	
+	if &KERNEL_DONE==0
+	(
+		goto LOAD_KERNEL
+	)
+	
+	if &RAMDISK_DONE==0
+	(
+		goto LOAD_RAMDISK
+	)
+	
+	if &BOOTLOADER_DONE==0
+	(
+		goto LOAD_BOOTLOADER
+	)
+	
+	if &SYMBOL_DONE==0
+	(
+		goto LOAD_SYMBOL
+	)
+	
+	if &REST_INIT_DONE==0
+	(
+		goto REST_INIT
+	)
+	
+	if &CPU1_DONE==0
+	(
+		goto SET_CPU1
+	)
+		
+	if &CPU2_DONE==0
+	(
+		goto SET_CPU2
+	)
+		
+	if &CPU3_DONE==0
+	(
+		goto SET_CPU3
+	)
+	
+	if &INIT_DONE==0
+	(
+		goto FINAL_STEP
+	)
+    if data.long(asd:0x10000000)!=0x00000024
+    (
+        data.set asd:0x10000000  %long 0x22000024
+    )
+)
+
+stop
+end
+
+enddo

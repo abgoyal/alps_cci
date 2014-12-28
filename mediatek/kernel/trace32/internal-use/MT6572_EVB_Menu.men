@@ -1,0 +1,159 @@
+ADD
+TOOLBAR
+(
+  TOOLITEM "Chip Reset" "DO MT6572_EVB_Linux_Nocode.cmm M_CHIP_RESET"
+  [
+
+    XXX
+   XCCX
+  XCCCXXXXXXXXX
+ XCCCCCCCCCCCCX
+ XCCCCCCCCCCCCX
+  XCCCXXXXXXCCX
+   XCCX    XCCX
+    XXX    XCCX
+ XXXX      XCCX
+ XCCX      XCCX
+ XCCXXXXXXXXCCX
+ XCCCCCCCCCCCCX
+ XCCCCCCCCCCCCX
+ XXXXXXXXXXXXXX
+
+  ]
+  TOOLITEM "Attach Target" "DO MT6572_EVB_Linux_Nocode.cmm M_CHIP_ATTACH"
+  [
+
+
+    XX    XX
+    XX    XX
+    XX    XX
+  XXXXXXXXXXXX
+  XyyyyyyyyyyX
+  XyyyyyyyyyyX
+  XyyyyyyyyyyX
+  XyyyyyyyyyyX
+   XyyyyyyyyX
+    XyyyyyyX
+     XXXXXX
+       XX
+       XX
+       XX
+  ]
+  TOOLITEM "Reload Kernel Symbols from ELF" "DO MT6572_EVB_Linux_Nocode.cmm M_RELOAD_ELF"
+  [
+
+
+bbbbb bb    bbbb
+bbbbb bb    bbbb
+bb    bb    bb
+bb    bb    bb
+bb    bb    bb
+bbbbb bb    bbbb
+bbbbb bb    bbbb
+bb    bb    bb
+bb    bb    bb
+bb    bb    bb
+bbbbb bbbbb bb
+bbbbb bbbbb bb
+
+
+  ]
+  TOOLITEM "Kernel Exception Debug" "DO MT6572_EVB_Linux_Nocode.cmm M_KE_DEBUG"
+  [
+
+
+  RRR      RRR
+  RRR      RRR
+  RRR      RRR
+  RRR     RRRR
+  RRRRRRRRRRR
+  RRRRRRRRRR
+  RRRRRRRRRRR
+  RRR     RRRR
+  RRR      RRR
+  RRR      RRR
+  RRR      RRR
+  RRR      RRR
+
+
+  ]
+  SEPARATOR
+  
+  TOOLITEM "Kick Watchdog" "DO MT6572_EVB_Linux_Nocode.cmm M_KICK_DOG"
+  [
+
+               X
+              XS
+             XSS
+      y bb  XSSS
+     yy bbbXSSSX
+    yyy bbbbSSX
+yyyyyyyyybbbbX
+ yyyyyyyyybbbb
+    yyyyyyybb
+ yyyyyyyyyyy
+yyyyyyyyyyyy
+     yy   yy
+     yy   yy
+     yy   yy
+
+  ]
+  TOOLITEM "Break and Kick Dog" "DO MT6572_EVB_Linux_Nocode.cmm M_KICK_DOG_BREAK"
+  [
+
+RR RR          X
+RR RR         XS
+RR RR        XSS
+RR RR y bb  XSSS
+RR RRyy bbbXSSSX
+    yyy bbbbSSX
+yyyyyyyyybbbbX
+ yyyyyyyyybbbb
+    yyyyyyybb
+ yyyyyyyyyyy
+yyyyyyyyyyyy
+     yy   yy
+     yy   yy
+     yy   yy
+
+  ]
+  TOOLITEM "Disable Watchdog" "DO MT6572_EVB_Linux_Nocode.cmm M_LET_DOG_HOME"
+  [
+
+
+        RRRRR
+       RRRRRRR
+      RR    RRR
+     RR    RRRRR
+    yRR   RRR RR
+yyyyyRRyyRRR  RR
+ yyyyRRyRRRy  RR
+    yRRRRRyy  RR
+ yyyyyRRRyyy RR
+yyyyyyyRRRRRRR
+     yy RRRRR
+     yy   yy
+     yy   yy
+
+  ]
+  TOOLITEM "Break and Disable Watchdog" "DO MT6572_EVB_Linux_Nocode.cmm M_LET_DOG_HOME_BREAK"
+  [
+  
+RR RR
+RR RR   RRRRR
+RR RR  RRRRRRR
+RR RR RR    RRR
+RR RRRR    RRRRR
+    yRR   RRR RR
+yyyyyRRyyRRR  RR
+ yyyyRRyRRRy  RR
+    yRRRRRyy  RR
+ yyyyyRRRyyy RR
+yyyyyyyRRRRRRR
+     yy RRRRR
+     yy   yy
+     yy   yy
+
+   ]
+   SEPARATOR
+)

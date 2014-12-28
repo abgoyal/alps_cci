@@ -1,0 +1,117 @@
+
+&NR_CPUS=2
+
+&lpddr2=1
+sys.down
+DEBUG.PollingTime 100ms
+SYSTEM.Reset
+SYStem.CPU CortexA9MPCoreSMP2
+System.Option Cflush on    	;flush the cache to avoid data consistency
+SYSTEM.OPTION ENRESET On
+SYSTEM.OPTION TRST On
+SYStem.Option ResBreak OFF
+SYStem.Option WaitReset OFF
+SYStem.JtagClock 10MHz
+
+
+;R-T Memory Access
+SYSTEM.MULTICORE MEMORYACCESSPORT 0
+SYSTEM.MULTICORE DEBUGACCESSPORT 1
+
+;Setting Core debug register access
+SYSTEM.MULTICORE COREBASE APB:0x80070000 0x80072000
+
+;ConnectGo
+sys.mode go
+
+sys.mode go
+wait 500.ms
+sys.mode down
+wait 100.ms
+sys.mode up
+
+SETUP.IMASKASM	ON          ; Disbale interrupt during assembly step
+SETUP.IMASKHLL	ON          ; Disbale interrupt during C step
+
+D.S SD:0xC0000000 %LE %LONG 0x00002226 ;disable wdt
+
+Break.SELect Program OnChip ; set_hw_breakpoint_by_def   Jau add
+;Break.SELect Hll OnChip     ; setting attribute of breakpoints
+;Break.SELect Spot OnChip
+Break.SELect Read OnChip
+Break.SELect Write OnChip
+
+do MT6577_EVB_PLL.cmm			; Init PLL.
+do MT6577_EVB_DDR.cmm			; Init DDR rank 1.
+;D.S SD:0xC0004110 %LE %LONG 0x0805114B	; Swap CS0<->CS1.
+;do MT6577_EVB_DDR.cmm			; Init DDR rank 2.
+;D.S SD:0xC0004110 %LE %LONG 0x08051143	; Swap CS1<->CS0 back.
+
+;*AP_MD_CONFG_CLKSW_CON0 = 0x1457;    // clock divider
+D.S SD:0xD10D0910 %LE %LONG 0x00001457
+
+;*AP_MD_CONFG_CLKSW_CON2 = 0x0555;    // switch all MD clock from 52M to higher clock
+D.S SD:0xD10D0918 %LE %LONG 0x00000555
+
+;Disable FCORE watchdog (Write 0x2203 to turn on again.)
+D.S SD:0xD10C0020 %LE %LONG 0x2202
+
+;FCORE reset
+D.S SD:0xD10C0044 %LE %LONG 0x48
+;FCORE L1 memory enable
+D.S SD:0xD9090028 %LE %LONG 0x9
+;D.S SD:0xD0080000 %LE %LONG 0
+
+; Linux kernel init start
+&KernelPath="../../../../kernel"
+&RamdiskImg="rootfs_mt8320.gz"
+&PhyRamStart=0x01600000
+&KernelStart=&PhyRamStart+0x8000
+&RamdiskStart=&PhyRamStart+0x02ff0000
+
+
+print "loading Linux image..."
+data.load.binary &KernelPath/out/arch/arm/boot/Image &KernelStart
+
+print "loading ram disk"
+Data.LOAD.Binary &RamdiskImg &RamdiskStart /noclear /nosymbol 
+
+print "loading Linux kernel symbols..."
+Y.SPATH.RESET ; reset all source path
+Y.SPATH.SRD ../../../../mediatek/platform/mt6577/kernel
+Y.SPATH.SRD ../../../../mediatek/source/kernel
+Y.SPATH.SRD ../../../../mediatek/custom/out/&project/kernel
+Y.SPATH.SRD ../../../../kernel/out/init
+Y.SPATH.SRD ../../../../kernel/out/drivers/
+Y.SPATH.SRD ../../../../kernel/out/include
+Y.SPATH.SRD ../../../../kernel/out/lib
+Y.SPATH.SRD ../../../../kernel/out/fs/fat
+Y.SPATH.SRD ../../../../kernel/out/tools
+
+Data.LOAD.Elf ../../../../kernel/out/vmlinux /gnu /nocode
+
+; Linux kernel init end
+
+print "loading bootloader..."
+data.load.elf mt6577_fpga_bl.axf /gnu /noclear
+
+
+r.s r7 OS.FILE.SIZE(&RamdiskImg)
+r.s pc 0x0FF00000
+
+if &NR_CPUS==1
+(
+)
+else
+(
+    core.select 1
+    r.s pc 0x0FF00000
+    core.select 0
+)
+
+;B.set C_Main
+d.l
+;go
+
+
+

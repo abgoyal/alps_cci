@@ -1,0 +1,5 @@
+export PATH=YOUR_WORKING_DIRECTORY/alps_cci/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.6/bin:$PATH
+
+cd YOUR_WORKING_DIRECTORY/alps_cci/kernel
+
+TARGET_PRODUCT=cci72_we_gb3 ARCH_MTK_PLATFORM=mt6572 MTK_ROOT_CUSTOM=../mediatek/custom MTK_PATH_SOURCE=../mediatek/kernel/ MTK_PATH_PLATFORM=../mediatek/platform/mt6572/kernel/ ARCH_MTK_PLATFORM=mt6572 make -j 24
